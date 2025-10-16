@@ -1,0 +1,73 @@
+{
+    "name": "fiachehr/laravel-pardakht",
+    "description": "Professional Laravel payment gateway package for Iranian payment providers with SOLID principles and clean architecture",
+    "keywords": [
+        "laravel",
+        "payment",
+        "gateway",
+        "mellat",
+        "mabna",
+        "zarinpal",
+        "iran",
+        "persian",
+        "payment-gateway",
+        "online-payment"
+    ],
+    "homepage": "https://github.com/fiachehr/laravel-pardakht",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Fiachehr",
+            "email": "mailbox@fiachehr.ir",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.1|^8.2|^8.3",
+        "illuminate/support": "^10.0|^11.0",
+        "illuminate/database": "^10.0|^11.0",
+        "illuminate/http": "^10.0|^11.0",
+        "guzzlehttp/guzzle": "^7.0",
+        "ext-soap": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0",
+        "phpunit/phpunit": "^10.0|^11.0",
+        "mockery/mockery": "^1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Fiachehr\\Pardakht\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Fiachehr\\Pardakht\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-coverage": "vendor/bin/phpunit --coverage-html coverage",
+        "format": "vendor/bin/pint",
+        "analyse": "vendor/bin/phpstan analyse"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Fiachehr\\Pardakht\\PardakhtServiceProvider"
+            ],
+            "aliases": {
+                "Pardakht": "Fiachehr\\Pardakht\\Facades\\Pardakht"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "optimize-autoloader": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
