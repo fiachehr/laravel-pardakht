@@ -481,7 +481,6 @@ This package is open-sourced software licensed under the MIT license. See [LICEN
 - [Laravel Documentation](https://laravel.com/docs)
 - [BankTest.ir](https://banktest.ir) - Bank gateway testing environment
 - [ZarinPal Documentation](https://docs.zarinpal.com)
-- [Package Architecture](ARCHITECTURE.md)
 
 ## FAQ
 
