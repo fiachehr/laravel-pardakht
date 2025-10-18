@@ -92,7 +92,8 @@ class ZarinPalGateway extends AbstractGateway
                     paymentUrl: $paymentUrl,
                     referenceId: $authority,
                     message: $data['message'] ?? 'Payment request successful',
-                    rawResponse: $response
+                    rawResponse: $response,
+                    formParams: [] // ZarinPal uses GET redirect
                 );
             }
 

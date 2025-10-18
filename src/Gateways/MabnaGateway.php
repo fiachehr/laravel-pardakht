@@ -68,12 +68,9 @@ class MabnaGateway extends AbstractGateway
         $data = http_build_query($params);
 
         try {
-            $response = $this->makeHttpRequest('POST', $tokenUrl, [
-                'headers' => [
-                    'Content-Type' => 'application/x-www-form-urlencoded',
-                ],
-                'body' => $data,
-            ]);
+            // Mabna API expects GET request with query parameters
+            $fullUrl = $tokenUrl . '?' . $data;
+            $response = $this->makeHttpRequest('GET', $fullUrl);
 
             $status = (int) ($response['Status'] ?? -1);
             $accessToken = $response['AccessToken'] ?? null;
@@ -91,6 +88,9 @@ class MabnaGateway extends AbstractGateway
                         'status' => $status,
                         'token' => $accessToken,
                         'terminal_id' => $this->getConfig('terminal_id'),
+                    ],
+                    formParams: [
+                        'token' => $accessToken,
                     ]
                 );
             }

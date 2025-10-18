@@ -102,6 +102,9 @@ class MellatGateway extends AbstractGateway
                     rawResponse: [
                         'res_code' => $resCode,
                         'ref_id' => $refId,
+                    ],
+                    formParams: [
+                        'RefId' => $refId,
                     ]
                 );
             }

@@ -15,7 +15,8 @@ class PaymentResponse
         public readonly ?string $paymentUrl = null,
         public readonly ?string $referenceId = null,
         public readonly ?string $message = null,
-        public readonly array $rawResponse = []
+        public readonly array $rawResponse = [],
+        public readonly array $formParams = []
     ) {}
 
     /**
@@ -62,6 +63,7 @@ class PaymentResponse
             'reference_id' => $this->referenceId,
             'message' => $this->message,
             'raw_response' => $this->rawResponse,
+            'form_params' => $this->formParams,
         ];
     }
 }
