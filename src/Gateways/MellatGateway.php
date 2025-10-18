@@ -76,9 +76,9 @@ class MellatGateway extends AbstractGateway
                 'amount' => (int) $request->amount,
                 'localDate' => date('Ymd'),
                 'localTime' => date('His'),
-                'additionalData' => $request->description ?? '',
+                'additionalData' => substr($request->description ?? '', 0, 100),
                 'callBackUrl' => $request->callbackUrl,
-                'payerId' => 0,
+                'payerId' => (int) ($request->metadata['user_id'] ?? 0),
             ];
 
             $soapResult = $client->__soapCall('bpPayRequest', [$parameters]);
