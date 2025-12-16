@@ -1,6 +1,6 @@
 {
     "name": "fiachehr/laravel-pardakht",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Professional Laravel payment gateway package for Iranian payment providers with SOLID principles and clean architecture",
     "keywords": [
         "laravel",
