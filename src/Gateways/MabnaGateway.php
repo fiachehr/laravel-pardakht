@@ -76,7 +76,7 @@ class MabnaGateway extends AbstractGateway
             ]);
 
             $status = (int) ($response['Status'] ?? -1);
-            $accessToken = $response['AccessToken'] ?? null;
+            $accessToken = $response['Accesstoken'] ?? $response['AccessToken'] ?? $response['Token'] ?? null;
 
             if ($status === 0 && $accessToken) {
                 $trackingCode = $this->generateTrackingCode();
