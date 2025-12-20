@@ -49,80 +49,140 @@ class MellatGateway extends AbstractGateway
     {
         $wsdl = $this->sandbox ? self::WSDL_SANDBOX : self::WSDL_PRODUCTION;
 
-        try {
-            $soapOptions = [
-                'encoding' => 'UTF-8',
-                'trace' => true,
-                'exceptions' => true,
-                'connection_timeout' => 30,
-            ];
+        $parameters = [
+            'terminalId' => (int) $this->getConfig('terminal_id'),
+            'userName' => $this->getConfig('username'),
+            'userPassword' => $this->getConfig('password'),
+            'orderId' => (int) $request->orderId,
+            'amount' => (int) $request->amount,
+            'localDate' => date('Ymd'),
+            'localTime' => date('His'),
+            'additionalData' => substr($request->description ?? '', 0, 100),
+            'callBackUrl' => $request->callbackUrl,
+            'payerId' => (int) ($request->metadata['user_id'] ?? 0),
+        ];
 
-            if ($this->sandbox) {
-                $soapOptions['stream_context'] = stream_context_create([
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
-                    ]
-                ]);
-            }
+        // Retry logic for handling 502 Bad Gateway errors
+        $maxRetries = 3;
+        $retryDelay = 2; // seconds
+        $lastException = null;
 
-            $client = new \SoapClient($wsdl, $soapOptions);
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $soapOptions = [
+                    'encoding' => 'UTF-8',
+                    'trace' => true,
+                    'exceptions' => true,
+                    'connection_timeout' => 30,
+                    'default_socket_timeout' => 30,
+                ];
 
-            $parameters = [
-                'terminalId' => (int) $this->getConfig('terminal_id'),
-                'userName' => $this->getConfig('username'),
-                'userPassword' => $this->getConfig('password'),
-                'orderId' => (int) $request->orderId,
-                'amount' => (int) $request->amount,
-                'localDate' => date('Ymd'),
-                'localTime' => date('His'),
-                'additionalData' => substr($request->description ?? '', 0, 100),
-                'callBackUrl' => $request->callbackUrl,
-                'payerId' => (int) ($request->metadata['user_id'] ?? 0),
-            ];
+                if ($this->sandbox) {
+                    $soapOptions['stream_context'] = stream_context_create([
+                        'ssl' => [
+                            'verify_peer' => false,
+                            'verify_peer_name' => false,
+                            'allow_self_signed' => true,
+                        ],
+                        'http' => [
+                            'timeout' => 30,
+                            'user_agent' => 'MellatGateway/1.0',
+                        ]
+                    ]);
+                }
 
-            $soapResult = $client->__soapCall('bpPayRequest', [$parameters]);
-            $result = is_array($soapResult) || is_object($soapResult) ? $soapResult->return : "-1";
+                $client = new \SoapClient($wsdl, $soapOptions);
 
-            // Parse response: Format is "ResCode,RefId"
-            $parts = explode(',', $result);
-            $resCode = (int) ($parts[0] ?? -1);
-            $refId = $parts[1] ?? null;
+                $soapResult = $client->__soapCall('bpPayRequest', [$parameters]);
+                $result = is_array($soapResult) || is_object($soapResult) ? $soapResult->return : "-1";
 
-            if ($resCode === 0 && $refId) {
-                $trackingCode = $this->generateTrackingCode();
-                $paymentUrl = $this->sandbox ? self::PAYMENT_URL_SANDBOX : self::PAYMENT_URL_PRODUCTION;
+                // Parse response: Format is "ResCode,RefId"
+                $parts = explode(',', $result);
+                $resCode = (int) ($parts[0] ?? -1);
+                $refId = $parts[1] ?? null;
 
-                return new PaymentResponse(
-                    success: true,
-                    trackingCode: $trackingCode,
-                    paymentUrl: $paymentUrl,
-                    referenceId: $refId,
-                    message: 'Payment request successful',
-                    rawResponse: [
-                        'res_code' => $resCode,
-                        'ref_id' => $refId,
-                    ],
-                    formParams: [
-                        'RefId' => $refId,
-                    ]
+                if ($resCode === 0 && $refId) {
+                    $trackingCode = $this->generateTrackingCode();
+                    $paymentUrl = $this->sandbox ? self::PAYMENT_URL_SANDBOX : self::PAYMENT_URL_PRODUCTION;
+
+                    return new PaymentResponse(
+                        success: true,
+                        trackingCode: $trackingCode,
+                        paymentUrl: $paymentUrl,
+                        referenceId: $refId,
+                        message: 'Payment request successful',
+                        rawResponse: [
+                            'res_code' => $resCode,
+                            'ref_id' => $refId,
+                        ],
+                        formParams: [
+                            'RefId' => $refId,
+                        ]
+                    );
+                }
+
+                throw GatewayException::requestFailed(
+                    'mellat',
+                    $this->getErrorMessage($resCode),
+                    $resCode
+                );
+            } catch (\SoapFault $e) {
+                $lastException = $e;
+                $errorMessage = $e->getMessage();
+
+                // Check if it's a connection/gateway error (502, timeout, etc.)
+                $isRetryableError = (
+                    str_contains($errorMessage, '502') ||
+                    str_contains($errorMessage, 'Bad Gateway') ||
+                    str_contains($errorMessage, 'timeout') ||
+                    str_contains($errorMessage, 'Connection') ||
+                    str_contains($errorMessage, 'HTTP') ||
+                    $e->getCode() === 0
+                );
+
+                if ($isRetryableError && $attempt < $maxRetries) {
+                    // Wait before retrying
+                    sleep($retryDelay * $attempt);
+                    continue;
+                }
+
+                throw GatewayException::connectionFailed(
+                    'mellat',
+                    "Connection failed after {$attempt} attempt(s): " . $errorMessage
+                );
+            } catch (\Exception $e) {
+                if ($e instanceof GatewayException) {
+                    throw $e;
+                }
+
+                $lastException = $e;
+
+                // Check if it's a retryable error
+                $isRetryableError = (
+                    str_contains($e->getMessage(), '502') ||
+                    str_contains($e->getMessage(), 'Bad Gateway') ||
+                    str_contains($e->getMessage(), 'timeout') ||
+                    str_contains($e->getMessage(), 'Connection')
+                );
+
+                if ($isRetryableError && $attempt < $maxRetries) {
+                    sleep($retryDelay * $attempt);
+                    continue;
+                }
+
+                throw GatewayException::requestFailed(
+                    'mellat',
+                    "Request failed after {$attempt} attempt(s): " . $e->getMessage()
                 );
             }
-
-            throw GatewayException::requestFailed(
-                'mellat',
-                $this->getErrorMessage($resCode),
-                $resCode
-            );
-        } catch (\SoapFault $e) {
-            throw GatewayException::connectionFailed('mellat', $e->getMessage());
-        } catch (\Exception $e) {
-            if ($e instanceof GatewayException) {
-                throw $e;
-            }
-
-            throw GatewayException::requestFailed('mellat', $e->getMessage());
         }
+
+        // If we get here, all retries failed
+        throw GatewayException::connectionFailed(
+            'mellat',
+            "Failed to connect to gateway after {$maxRetries} attempts. Last error: " .
+                ($lastException ? $lastException->getMessage() : 'Unknown error')
+        );
     }
 
     /**
@@ -148,89 +208,149 @@ class MellatGateway extends AbstractGateway
             );
         }
 
-        try {
-            $soapOptions = [
-                'encoding' => 'UTF-8',
-                'trace' => true,
-                'exceptions' => true,
-                'connection_timeout' => 30,
-            ];
+        // Retry logic for handling 502 Bad Gateway errors
+        $maxRetries = 3;
+        $retryDelay = 2; // seconds
+        $lastException = null;
 
-            if ($this->sandbox) {
-                $soapOptions['stream_context'] = stream_context_create([
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $soapOptions = [
+                    'encoding' => 'UTF-8',
+                    'trace' => true,
+                    'exceptions' => true,
+                    'connection_timeout' => 30,
+                    'default_socket_timeout' => 30,
+                ];
+
+                if ($this->sandbox) {
+                    $soapOptions['stream_context'] = stream_context_create([
+                        'ssl' => [
+                            'verify_peer' => false,
+                            'verify_peer_name' => false,
+                            'allow_self_signed' => true,
+                        ],
+                        'http' => [
+                            'timeout' => 30,
+                            'user_agent' => 'MellatGateway/1.0',
+                        ]
+                    ]);
+                }
+
+                $client = new \SoapClient($wsdl, $soapOptions);
+
+                // Verify transaction
+                $verifyParams = [
+                    'terminalId' => (int) $this->getConfig('terminal_id'),
+                    'userName' => $this->getConfig('username'),
+                    'userPassword' => $this->getConfig('password'),
+                    'orderId' => (int) $saleOrderId,
+                    'saleOrderId' => (int) $saleOrderId,
+                    'saleReferenceId' => (int) $saleReferenceId,
+                ];
+
+                $verifyResponse = $client->__soapCall('bpVerifyRequest', [$verifyParams]);
+                $verifyCode = (int) ($verifyResponse->return ?? -1);
+
+                if ($verifyCode !== 0) {
+                    throw GatewayException::verificationFailed(
+                        'mellat',
+                        $this->getErrorMessage($verifyCode),
+                        $verifyCode
+                    );
+                }
+
+                // Settle (confirm) transaction
+                $settleParams = [
+                    'terminalId' => (int) $this->getConfig('terminal_id'),
+                    'userName' => $this->getConfig('username'),
+                    'userPassword' => $this->getConfig('password'),
+                    'orderId' => (int) $saleOrderId,
+                    'saleOrderId' => (int) $saleOrderId,
+                    'saleReferenceId' => (int) $saleReferenceId,
+                ];
+
+                $settleResponse = $client->__soapCall('bpSettleRequest', [$settleParams]);
+                $settleCode = (int) ($settleResponse->return ?? -1);
+
+                if ($settleCode !== 0 && $settleCode !== 45) { // 45 means already settled
+                    throw GatewayException::verificationFailed(
+                        'mellat',
+                        $this->getErrorMessage($settleCode),
+                        $settleCode
+                    );
+                }
+
+                return new VerificationResponse(
+                    success: true,
+                    referenceId: $saleReferenceId,
+                    cardNumber: $cardHolderInfo,
+                    transactionId: $refId,
+                    message: 'Payment verified and settled successfully',
+                    rawResponse: [
+                        'verify_code' => $verifyCode,
+                        'settle_code' => $settleCode,
+                        'sale_order_id' => $saleOrderId,
+                        'sale_reference_id' => $saleReferenceId,
                     ]
-                ]);
-            }
+                );
+            } catch (\SoapFault $e) {
+                $lastException = $e;
+                $errorMessage = $e->getMessage();
 
-            $client = new \SoapClient($wsdl, $soapOptions);
+                // Check if it's a connection/gateway error (502, timeout, etc.)
+                $isRetryableError = (
+                    str_contains($errorMessage, '502') ||
+                    str_contains($errorMessage, 'Bad Gateway') ||
+                    str_contains($errorMessage, 'timeout') ||
+                    str_contains($errorMessage, 'Connection') ||
+                    str_contains($errorMessage, 'HTTP') ||
+                    $e->getCode() === 0
+                );
 
-            // Verify transaction
-            $verifyParams = [
-                'terminalId' => (int) $this->getConfig('terminal_id'),
-                'userName' => $this->getConfig('username'),
-                'userPassword' => $this->getConfig('password'),
-                'orderId' => (int) $saleOrderId,
-                'saleOrderId' => (int) $saleOrderId,
-                'saleReferenceId' => (int) $saleReferenceId,
-            ];
+                if ($isRetryableError && $attempt < $maxRetries) {
+                    // Wait before retrying
+                    sleep($retryDelay * $attempt);
+                    continue;
+                }
 
-            $verifyResponse = $client->__soapCall('bpVerifyRequest', [$verifyParams]);
-            $verifyCode = (int) ($verifyResponse->return ?? -1);
+                throw GatewayException::connectionFailed(
+                    'mellat',
+                    "Connection failed during verification after {$attempt} attempt(s): " . $errorMessage
+                );
+            } catch (\Exception $e) {
+                if ($e instanceof GatewayException) {
+                    throw $e;
+                }
 
-            if ($verifyCode !== 0) {
+                $lastException = $e;
+
+                // Check if it's a retryable error
+                $isRetryableError = (
+                    str_contains($e->getMessage(), '502') ||
+                    str_contains($e->getMessage(), 'Bad Gateway') ||
+                    str_contains($e->getMessage(), 'timeout') ||
+                    str_contains($e->getMessage(), 'Connection')
+                );
+
+                if ($isRetryableError && $attempt < $maxRetries) {
+                    sleep($retryDelay * $attempt);
+                    continue;
+                }
+
                 throw GatewayException::verificationFailed(
                     'mellat',
-                    $this->getErrorMessage($verifyCode),
-                    $verifyCode
+                    "Verification failed after {$attempt} attempt(s): " . $e->getMessage()
                 );
             }
-
-            // Settle (confirm) transaction
-            $settleParams = [
-                'terminalId' => (int) $this->getConfig('terminal_id'),
-                'userName' => $this->getConfig('username'),
-                'userPassword' => $this->getConfig('password'),
-                'orderId' => (int) $saleOrderId,
-                'saleOrderId' => (int) $saleOrderId,
-                'saleReferenceId' => (int) $saleReferenceId,
-            ];
-
-            $settleResponse = $client->__soapCall('bpSettleRequest', [$settleParams]);
-            $settleCode = (int) ($settleResponse->return ?? -1);
-
-            if ($settleCode !== 0 && $settleCode !== 45) { // 45 means already settled
-                throw GatewayException::verificationFailed(
-                    'mellat',
-                    $this->getErrorMessage($settleCode),
-                    $settleCode
-                );
-            }
-
-            return new VerificationResponse(
-                success: true,
-                referenceId: $saleReferenceId,
-                cardNumber: $cardHolderInfo,
-                transactionId: $refId,
-                message: 'Payment verified and settled successfully',
-                rawResponse: [
-                    'verify_code' => $verifyCode,
-                    'settle_code' => $settleCode,
-                    'sale_order_id' => $saleOrderId,
-                    'sale_reference_id' => $saleReferenceId,
-                ]
-            );
-        } catch (\SoapFault $e) {
-            throw GatewayException::connectionFailed('mellat', $e->getMessage());
-        } catch (\Exception $e) {
-            if ($e instanceof GatewayException) {
-                throw $e;
-            }
-
-            throw GatewayException::verificationFailed('mellat', $e->getMessage());
         }
+
+        // If we get here, all retries failed
+        throw GatewayException::connectionFailed(
+            'mellat',
+            "Failed to verify payment after {$maxRetries} attempts. Last error: " .
+                ($lastException ? $lastException->getMessage() : 'Unknown error')
+        );
     }
 
     /**

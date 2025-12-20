@@ -131,11 +131,24 @@ class ZarinPalGateway extends AbstractGateway
         }
 
         // Get transaction data from tracking code
-        // This would typically come from your database
+        // Amount should be retrieved from transaction stored in database
+        // For now, try to get from gateway data or use a default approach
+        $amount = $request->getGatewayData('amount');
+
+        // If amount is not in gateway data, we need to get it from transaction
+        // This is a limitation - amount should be passed or retrieved from transaction
+        if (!$amount || $amount <= 0) {
+            throw GatewayException::verificationFailed(
+                'zarinpal',
+                'Transaction amount is required for verification',
+                -9
+            );
+        }
+
         $payload = [
             'merchant_id' => $this->getConfig('merchant_id'),
             'authority' => $authority,
-            'amount' => $request->getGatewayData('amount'), // Should be retrieved from database
+            'amount' => (int) $amount,
         ];
 
         try {
