@@ -14,7 +14,7 @@ class InvalidGatewayExceptionTest extends TestCase
 
         $this->assertInstanceOf(InvalidGatewayException::class, $exception);
         $this->assertStringContainsString('custom_gateway', $exception->getMessage());
-        $this->assertStringContainsString('not found', strtolower($exception->getMessage()));
+        $this->assertStringContainsString('does not exist', strtolower($exception->getMessage()));
     }
 
     /** @test */

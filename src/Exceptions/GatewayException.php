@@ -13,6 +13,8 @@ class GatewayException extends PardakhtException
     {
         $exception = new self("Gateway [{$gateway}] request failed: {$message}");
         $exception->setGatewayCode($code);
+        $exception->setGatewayName($gateway);
+
         return $exception;
     }
 
@@ -20,16 +22,24 @@ class GatewayException extends PardakhtException
     {
         $exception = new self("Gateway [{$gateway}] verification failed: {$message}");
         $exception->setGatewayCode($code);
+        $exception->setGatewayName($gateway);
+
         return $exception;
     }
 
     public static function invalidConfiguration(string $gateway, string $parameter): self
     {
-        return new self("Gateway [{$gateway}] configuration is invalid: Missing or invalid [{$parameter}]");
+        $exception = new self("Gateway [{$gateway}] configuration is invalid: Missing or invalid [{$parameter}]");
+        $exception->setGatewayName($gateway);
+
+        return $exception;
     }
 
     public static function connectionFailed(string $gateway, string $message): self
     {
-        return new self("Gateway [{$gateway}] connection failed: {$message}");
+        $exception = new self("Gateway [{$gateway}] connection failed: {$message}");
+        $exception->setGatewayName($gateway);
+
+        return $exception;
     }
 }

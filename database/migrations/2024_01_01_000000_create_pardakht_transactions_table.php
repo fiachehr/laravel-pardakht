@@ -15,7 +15,7 @@ return new class extends Migration
 
         Schema::create($tableName, function (Blueprint $table) {
             $table->id();
-            $table->string('tracking_code')->unique()->index();
+            $table->string('tracking_code')->unique();
             $table->string('reference_id')->nullable()->index();
             $table->string('transaction_id')->nullable();
             $table->string('gateway', 50)->index();
@@ -37,10 +37,9 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Indexes for better query performance
+            // Indexes for better query performance (payable_type + payable_id already indexed by nullableMorphs)
             $table->index(['status', 'gateway']);
             $table->index(['created_at']);
-            $table->index(['payable_type', 'payable_id']);
         });
     }
 

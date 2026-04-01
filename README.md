@@ -7,8 +7,13 @@
 
 Professional Laravel payment gateway package for Iranian payment providers with full SOLID principles and Clean Architecture.
 
+## Documentation
+
+**[Laravel Pardakht — Documentation](https://fiachehr.ir/docs/laravel-pardakht.html)** (hosted on [fiachehr.ir](https://fiachehr.ir))
+
 ## Table of Contents
 
+- [Documentation](#documentation)
 - [Supported Gateways](#supported-gateways)
 - [Key Features](#key-features)
 - [Requirements](#requirements)
@@ -51,8 +56,8 @@ Professional Laravel payment gateway package for Iranian payment providers with 
 
 ## Requirements
 
-- PHP 8.1 or higher
-- Laravel 10.x or 11.x
+- PHP 8.1 or higher (use **PHP 8.2+** when running **Laravel 12**)
+- Laravel 10.x, 11.x, or **12.x**
 - PHP SOAP extension (for Mellat gateway)
 - PHP JSON extension
 

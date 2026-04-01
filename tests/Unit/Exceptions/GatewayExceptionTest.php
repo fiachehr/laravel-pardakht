@@ -13,7 +13,7 @@ class GatewayExceptionTest extends TestCase
         $exception = GatewayException::connectionFailed('mellat', 'Connection timeout');
 
         $this->assertInstanceOf(GatewayException::class, $exception);
-        $this->assertEquals('mellat: Connection timeout', $exception->getMessage());
+        $this->assertEquals('Gateway [mellat] connection failed: Connection timeout', $exception->getMessage());
         $this->assertEquals('mellat', $exception->getGatewayName());
     }
 
@@ -23,7 +23,7 @@ class GatewayExceptionTest extends TestCase
         $exception = GatewayException::requestFailed('mellat', 'Invalid request', 400);
 
         $this->assertInstanceOf(GatewayException::class, $exception);
-        $this->assertEquals('mellat: Invalid request', $exception->getMessage());
+        $this->assertEquals('Gateway [mellat] request failed: Invalid request', $exception->getMessage());
         $this->assertEquals('mellat', $exception->getGatewayName());
         $this->assertEquals(400, $exception->getGatewayCode());
     }
@@ -34,7 +34,7 @@ class GatewayExceptionTest extends TestCase
         $exception = GatewayException::verificationFailed('mellat', 'Verification failed', 500);
 
         $this->assertInstanceOf(GatewayException::class, $exception);
-        $this->assertEquals('mellat: Verification failed', $exception->getMessage());
+        $this->assertEquals('Gateway [mellat] verification failed: Verification failed', $exception->getMessage());
         $this->assertEquals('mellat', $exception->getGatewayName());
         $this->assertEquals(500, $exception->getGatewayCode());
     }

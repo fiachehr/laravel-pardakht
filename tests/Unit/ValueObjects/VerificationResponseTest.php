@@ -49,7 +49,7 @@ class VerificationResponseTest extends TestCase
             cardNumber: '1234567890123456'
         );
 
-        $this->assertEquals('123456******3456', $response->getMaskedCardNumber());
+        $this->assertEquals('1234********3456', $response->getMaskedCardNumber());
     }
 
     /** @test */

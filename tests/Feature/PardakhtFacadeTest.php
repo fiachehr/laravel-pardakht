@@ -30,7 +30,12 @@ class PardakhtFacadeTest extends TestCase
     /** @test */
     public function it_can_extend_gateways_through_facade()
     {
-        $customGatewayClass = new class extends \Fiachehr\Pardakht\Gateways\AbstractGateway {
+        $customGatewayClass = new class (['sandbox' => true]) extends \Fiachehr\Pardakht\Gateways\AbstractGateway {
+            public function __construct(array $config)
+            {
+                parent::__construct($config);
+            }
+
             public function getName(): string
             {
                 return 'custom';
