@@ -22,18 +22,15 @@ class PardakhtServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Merge configuration
         $this->mergeConfigFrom(
             __DIR__ . '/../config/pardakht.php',
             'pardakht'
         );
 
-        // Register Transaction Repository
         $this->app->bind(TransactionRepositoryInterface::class, function ($app) {
             return new TransactionRepository(new Transaction());
         });
 
-        // Register Gateway Manager as singleton
         $this->app->singleton('pardakht', function ($app) {
             $repository = null;
 
@@ -44,7 +41,6 @@ class PardakhtServiceProvider extends ServiceProvider
             return new GatewayManager($repository);
         });
 
-        // Alias for easier access
         $this->app->alias('pardakht', GatewayManager::class);
     }
 
@@ -55,18 +51,15 @@ class PardakhtServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Publish configuration
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__ . '/../config/pardakht.php' => config_path('pardakht.php'),
             ], 'pardakht-config');
 
-            // Publish migrations
             $this->publishes([
                 __DIR__ . '/../database/migrations/' => database_path('migrations'),
             ], 'pardakht-migrations');
 
-            // Load migrations
             $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         }
     }

@@ -57,7 +57,6 @@ class MabnaGateway extends AbstractGateway
         $tokenUrl = $this->sandbox ? self::TOKEN_URL_SANDBOX : self::TOKEN_URL_PRODUCTION;
         $paymentUrl = $this->sandbox ? self::PAYMENT_URL_SANDBOX : self::PAYMENT_URL_PRODUCTION;
 
-        // Build query string for token request
         $params = [
             'Amount' => $request->amount,
             'callbackURL' => $request->callbackUrl,
@@ -119,11 +118,9 @@ class MabnaGateway extends AbstractGateway
     {
         $verifyUrl = $this->sandbox ? self::VERIFY_URL_SANDBOX : self::VERIFY_URL_PRODUCTION;
 
-        // Get data from callback
         $digitalReceipt = $request->getGatewayData('digitalreceipt') ?? $request->getGatewayData('CRN');
         $status = $request->getGatewayData('status');
 
-        // Check callback status
         if ($status != 0) {
             throw GatewayException::verificationFailed(
                 'mabna',
@@ -139,7 +136,6 @@ class MabnaGateway extends AbstractGateway
             );
         }
 
-        // Build verify request
         $data = http_build_query([
             'digitalreceipt' => $digitalReceipt,
             'Tid' => $this->getConfig('terminal_id'),

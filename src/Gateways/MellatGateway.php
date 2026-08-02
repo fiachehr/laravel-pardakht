@@ -132,14 +132,12 @@ class MellatGateway extends AbstractGateway
     {
         $wsdl = $this->sandbox ? self::WSDL_SANDBOX : self::WSDL_PRODUCTION;
 
-        // Get data from callback
         $refId = $request->getGatewayData('RefId');
         $resCode = $request->getGatewayData('ResCode');
         $saleOrderId = $request->getGatewayData('SaleOrderId');
         $saleReferenceId = $request->getGatewayData('SaleReferenceId');
         $cardHolderInfo = $request->getGatewayData('CardHolderInfo');
 
-        // First check callback result
         if ($resCode != 0) {
             throw GatewayException::verificationFailed(
                 'mellat',
@@ -167,7 +165,6 @@ class MellatGateway extends AbstractGateway
 
             $client = new \SoapClient($wsdl, $soapOptions);
 
-            // Verify transaction
             $verifyParams = [
                 'terminalId' => (int) $this->getConfig('terminal_id'),
                 'userName' => $this->getConfig('username'),
@@ -188,7 +185,6 @@ class MellatGateway extends AbstractGateway
                 );
             }
 
-            // Settle (confirm) transaction
             $settleParams = [
                 'terminalId' => (int) $this->getConfig('terminal_id'),
                 'userName' => $this->getConfig('username'),

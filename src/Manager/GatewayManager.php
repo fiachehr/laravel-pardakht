@@ -44,12 +44,10 @@ class GatewayManager
     {
         $name = $name ?? $this->getDefaultGateway();
 
-        // Return cached instance if exists
         if (isset($this->gateways[$name])) {
             return $this->gateways[$name];
         }
 
-        // Create new instance
         $config = $this->getGatewayConfig($name);
         $driver = $config['driver'] ?? $name;
 
@@ -75,7 +73,6 @@ class GatewayManager
         $gatewayInstance = $this->gateway($gateway);
         $response = $gatewayInstance->request($request);
 
-        // Store transaction if enabled
         if ($this->shouldStoreTransactions() && $response->isSuccessful()) {
             $this->storeTransaction($request, $response, $gatewayInstance->getName());
         }
@@ -95,7 +92,6 @@ class GatewayManager
         $gatewayInstance = $this->gateway($gateway);
         $response = $gatewayInstance->verify($request);
 
-        // Update transaction if enabled
         if ($this->shouldStoreTransactions()) {
             $this->updateTransaction($request->trackingCode, $response);
         }

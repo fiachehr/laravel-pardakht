@@ -59,7 +59,6 @@ class ZarinPalGateway extends AbstractGateway
             ], $request->metadata),
         ];
 
-        // Add optional fields
         if ($request->mobile) {
             $payload['metadata']['mobile'] = $request->mobile;
         }
@@ -118,11 +117,9 @@ class ZarinPalGateway extends AbstractGateway
     {
         $apiUrl = $this->sandbox ? self::API_SANDBOX : self::API_PRODUCTION;
 
-        // Get data from callback
         $authority = $request->getGatewayData('Authority');
         $status = $request->getGatewayData('Status');
 
-        // Check callback status
         if ($status !== 'OK') {
             throw GatewayException::verificationFailed(
                 'zarinpal',
@@ -130,9 +127,7 @@ class ZarinPalGateway extends AbstractGateway
             );
         }
 
-        // Get transaction data from tracking code
         // Amount should be retrieved from transaction stored in database
-        // For now, try to get from gateway data or use a default approach
         $amount = $request->getGatewayData('amount');
 
         // If amount is not in gateway data, we need to get it from transaction
