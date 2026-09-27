@@ -60,6 +60,25 @@ class MabnaGatewayTest extends TestCase
     }
 
     /** @test */
+    public function it_keeps_banktest_on_the_legacy_token_path()
+    {
+        $reflection = new \ReflectionClass(MabnaGateway::class);
+
+        $sandbox = $reflection->getReflectionConstant('TOKEN_URL_SANDBOX')->getValue();
+        $production = $reflection->getReflectionConstant('TOKEN_URL_PRODUCTION')->getValue();
+
+        $this->assertSame(
+            'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/GetToken',
+            $sandbox
+        );
+        $this->assertStringNotContainsString('/Rest/', $sandbox);
+        $this->assertSame(
+            'https://sepehr.shaparak.ir/Rest/V1/PeymentApi/GetToken',
+            $production
+        );
+    }
+
+    /** @test */
     public function it_returns_correct_error_messages()
     {
         $reflection = new \ReflectionClass($this->gateway);

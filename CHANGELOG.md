@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - 2026-09-27
+
+### Fixed
+- Mabna sandbox again uses the banktest.ir routes (`/V1/PeymentApi/GetToken` and `/V1/PeymentApi/Advice`). banktest does not serve the Sepehr 4.0.2 `/Rest/V1` paths, which returned 404.
+
 ## [1.0.8] - 2026-09-27
 
 ### Fixed

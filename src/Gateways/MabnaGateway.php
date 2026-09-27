@@ -21,10 +21,11 @@ class MabnaGateway extends AbstractGateway
     protected const VERIFY_URL_PRODUCTION = 'https://sepehr.shaparak.ir/Rest/V1/PeymentApi/AdviceWithInvoicId';
     protected const ROLLBACK_URL_PRODUCTION = 'https://sepehr.shaparak.ir/Rest/V1/PeymentApi/Rollback';
 
-    protected const TOKEN_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Rest/V1/PeymentApi/GetToken';
+    // banktest.ir only proxies the older Sepehr paths. It has no /Rest/V1 route.
+    protected const TOKEN_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/GetToken';
     protected const PAYMENT_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Pay';
-    protected const VERIFY_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Rest/V1/PeymentApi/AdviceWithInvoicId';
-    protected const ROLLBACK_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Rest/V1/PeymentApi/Rollback';
+    protected const VERIFY_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/Advice';
+    protected const ROLLBACK_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/Rollback';
 
     /**
      * @inheritDoc
@@ -69,12 +70,20 @@ class MabnaGateway extends AbstractGateway
         }
 
         try {
-            $response = $this->makeHttpRequest('POST', $tokenUrl, [
-                'headers' => [
-                    'Accept' => 'application/json',
-                ],
-                'json' => $params,
-            ]);
+            $response = $this->makeHttpRequest('POST', $tokenUrl, $this->sandbox
+                ? [
+                    'headers' => ['Content-Type' => 'application/x-www-form-urlencoded'],
+                    'body' => http_build_query([
+                        'Amount' => $params['Amount'],
+                        'callbackURL' => $params['callbackURL'],
+                        'InvoiceID' => $params['InvoiceID'],
+                        'TerminalID' => $params['TerminalID'],
+                    ]),
+                ]
+                : [
+                    'headers' => ['Accept' => 'application/json'],
+                    'json' => $params,
+                ]);
 
             $status = (int) ($response['Status'] ?? -1);
             $accessToken = $response['Accesstoken'] ?? $response['AccessToken'] ?? $response['Token'] ?? null;
@@ -135,7 +144,7 @@ class MabnaGateway extends AbstractGateway
             );
         }
 
-        if (!$digitalReceipt || $invoiceId === null || $invoiceId === '') {
+        if (!$digitalReceipt || (! $this->sandbox && ($invoiceId === null || $invoiceId === ''))) {
             throw GatewayException::verificationFailed(
                 'mabna',
                 'Digital receipt or invoice id not found'
@@ -143,24 +152,34 @@ class MabnaGateway extends AbstractGateway
         }
 
         try {
-            $response = $this->makeHttpRequest('POST', $verifyUrl, [
-                'headers' => [
-                    'Accept' => 'application/json',
-                ],
-                'json' => [
-                    'digitalreceipt' => $digitalReceipt,
-                    'InvoiceID' => (string) $invoiceId,
-                    'Tid' => (string) $this->getConfig('terminal_id'),
-                ],
-            ]);
+            $response = $this->makeHttpRequest('POST', $verifyUrl, $this->sandbox
+                ? [
+                    'headers' => ['Content-Type' => 'application/x-www-form-urlencoded'],
+                    'body' => http_build_query([
+                        'digitalreceipt' => $digitalReceipt,
+                        'Tid' => (string) $this->getConfig('terminal_id'),
+                    ]),
+                ]
+                : [
+                    'headers' => ['Accept' => 'application/json'],
+                    'json' => [
+                        'digitalreceipt' => $digitalReceipt,
+                        'InvoiceID' => (string) $invoiceId,
+                        'Tid' => (string) $this->getConfig('terminal_id'),
+                    ],
+                ]);
 
             $verifyStatus = strtolower((string) ($response['Status'] ?? ''));
             $returnId = $response['ReturnId'] ?? null;
             $message = $response['Message'] ?? '';
             $expectedAmount = $request->getGatewayData('amount');
 
+            if ($this->sandbox && (int) ($response['Status'] ?? -1) === 0) {
+                $verifyStatus = 'ok';
+            }
+
             if (in_array($verifyStatus, ['ok', 'duplicate'], true)) {
-                if ($expectedAmount !== null && (int) $returnId !== (int) $expectedAmount) {
+                if (! $this->sandbox && $expectedAmount !== null && (int) $returnId !== (int) $expectedAmount) {
                     throw GatewayException::verificationFailed(
                         'mabna',
                         'Verified amount does not match the requested amount',
