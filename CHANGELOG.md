@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.8] - 2026-09-27
+
+### Fixed
+- Mabna (Sepehr) now calls the 4.0.2 REST endpoints on port 443. Token, payment, and advice no longer use the retired `:8081` host whose certificate cURL rejects.
+- Advice sends `InvoiceID` and treats `Status` as `OK`, `NOK`, or `Duplicate`. The returned amount is compared with the requested amount.
+
 ## [1.0.0] - 2024-10-09
 
 ### Added

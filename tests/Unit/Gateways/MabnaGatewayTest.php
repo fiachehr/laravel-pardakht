@@ -68,12 +68,12 @@ class MabnaGatewayTest extends TestCase
 
         // Test error codes
         $this->assertEquals('Transaction successful', $method->invoke($this->gateway, 0));
-        $this->assertEquals('System error', $method->invoke($this->gateway, -1));
-        $this->assertEquals('Invalid input parameters', $method->invoke($this->gateway, -2));
-        $this->assertEquals('Terminal is inactive', $method->invoke($this->gateway, -3));
-        $this->assertEquals('Invalid transaction amount', $method->invoke($this->gateway, -4));
-        $this->assertEquals('Duplicate order number', $method->invoke($this->gateway, -5));
-        $this->assertEquals('Transaction cancelled by user', $method->invoke($this->gateway, -11));
+        $this->assertEquals('Transaction not found', $method->invoke($this->gateway, -1));
+        $this->assertEquals('IP mismatch or transaction already reversed', $method->invoke($this->gateway, -2));
+        $this->assertEquals('General gateway error', $method->invoke($this->gateway, -3));
+        $this->assertEquals('Callback URL does not match', $method->invoke($this->gateway, -4));
+        $this->assertEquals('IP address is not allowed', $method->invoke($this->gateway, -5));
+        $this->assertEquals('Invoice id does not match the original transaction', $method->invoke($this->gateway, -7));
         $this->assertStringContainsString('Unknown error', $method->invoke($this->gateway, -999));
     }
 }

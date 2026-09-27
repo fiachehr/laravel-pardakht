@@ -15,17 +15,16 @@ use Fiachehr\Pardakht\ValueObjects\VerificationResponse;
  */
 class MabnaGateway extends AbstractGateway
 {
-    // Production URLs
-    protected const TOKEN_URL_PRODUCTION = 'https://sepehr.shaparak.ir:8081/V1/PeymentApi/GetToken';
-    protected const PAYMENT_URL_PRODUCTION = 'https://sepehr.shaparak.ir:8080/Pay';
-    protected const VERIFY_URL_PRODUCTION = 'https://sepehr.shaparak.ir:8081/V1/PeymentApi/Advice';
-    protected const ROLLBACK_URL_PRODUCTION = 'https://sepehr.shaparak.ir:8081/V1/PeymentApi/Rollback';
+    // Sepehr token API 4.0.2. The previous :8081 host serves a certificate cURL rejects.
+    protected const TOKEN_URL_PRODUCTION = 'https://sepehr.shaparak.ir/Rest/V1/PeymentApi/GetToken';
+    protected const PAYMENT_URL_PRODUCTION = 'https://sepehr.shaparak.ir/Pay';
+    protected const VERIFY_URL_PRODUCTION = 'https://sepehr.shaparak.ir/Rest/V1/PeymentApi/AdviceWithInvoicId';
+    protected const ROLLBACK_URL_PRODUCTION = 'https://sepehr.shaparak.ir/Rest/V1/PeymentApi/Rollback';
 
-    // Sandbox URLs
-    protected const TOKEN_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/GetToken';
+    protected const TOKEN_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Rest/V1/PeymentApi/GetToken';
     protected const PAYMENT_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Pay';
-    protected const VERIFY_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/Advice';
-    protected const ROLLBACK_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/V1/PeymentApi/Rollback';
+    protected const VERIFY_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Rest/V1/PeymentApi/AdviceWithInvoicId';
+    protected const ROLLBACK_URL_SANDBOX = 'https://sandbox.banktest.ir/saderat/sepehr.shaparak.ir/Rest/V1/PeymentApi/Rollback';
 
     /**
      * @inheritDoc
@@ -58,20 +57,23 @@ class MabnaGateway extends AbstractGateway
         $paymentUrl = $this->sandbox ? self::PAYMENT_URL_SANDBOX : self::PAYMENT_URL_PRODUCTION;
 
         $params = [
-            'Amount' => $request->amount,
+            'TerminalID' => (string) $this->getConfig('terminal_id'),
+            'Amount' => (string) $request->amount,
+            'InvoiceID' => (string) $request->orderId,
             'callbackURL' => $request->callbackUrl,
-            'InvoiceID' => $request->orderId,
-            'TerminalID' => $this->getConfig('terminal_id'),
+            'payload' => (string) ($request->metadata['payload'] ?? ''),
         ];
 
-        $data = http_build_query($params);
+        if ($request->mobile) {
+            $params['CellNumber'] = $request->mobile;
+        }
 
         try {
             $response = $this->makeHttpRequest('POST', $tokenUrl, [
                 'headers' => [
-                    'Content-Type' => 'application/x-www-form-urlencoded',
+                    'Accept' => 'application/json',
                 ],
-                'body' => $data,
+                'json' => $params,
             ]);
 
             $status = (int) ($response['Status'] ?? -1);
@@ -92,6 +94,7 @@ class MabnaGateway extends AbstractGateway
                         'terminal_id' => $this->getConfig('terminal_id'),
                     ],
                     formParams: [
+                        'TerminalID' => (string) $this->getConfig('terminal_id'),
                         'token' => $accessToken,
                     ]
                 );
@@ -118,51 +121,62 @@ class MabnaGateway extends AbstractGateway
     {
         $verifyUrl = $this->sandbox ? self::VERIFY_URL_SANDBOX : self::VERIFY_URL_PRODUCTION;
 
-        $digitalReceipt = $request->getGatewayData('digitalreceipt') ?? $request->getGatewayData('CRN');
-        $status = $request->getGatewayData('status');
+        $digitalReceipt = $request->getGatewayData('digitalreceipt')
+            ?? $request->getGatewayData('DigitalReceipt')
+            ?? $request->getGatewayData('CRN');
+        $respCode = $request->getGatewayData('respcode', $request->getGatewayData('status'));
+        $invoiceId = $request->getGatewayData('invoiceid', $request->getGatewayData('InvoiceID'));
 
-        if ($status != 0) {
+        if ((string) $respCode !== '0') {
             throw GatewayException::verificationFailed(
                 'mabna',
-                $this->getErrorMessage((int) $status),
-                (int) $status
+                $this->getErrorMessage((int) $respCode),
+                (int) $respCode
             );
         }
 
-        if (!$digitalReceipt) {
+        if (!$digitalReceipt || $invoiceId === null || $invoiceId === '') {
             throw GatewayException::verificationFailed(
                 'mabna',
-                'Digital receipt not found'
+                'Digital receipt or invoice id not found'
             );
         }
-
-        $data = http_build_query([
-            'digitalreceipt' => $digitalReceipt,
-            'Tid' => $this->getConfig('terminal_id'),
-        ]);
 
         try {
             $response = $this->makeHttpRequest('POST', $verifyUrl, [
                 'headers' => [
-                    'Content-Type' => 'application/x-www-form-urlencoded',
+                    'Accept' => 'application/json',
                 ],
-                'body' => $data,
+                'json' => [
+                    'digitalreceipt' => $digitalReceipt,
+                    'InvoiceID' => (string) $invoiceId,
+                    'Tid' => (string) $this->getConfig('terminal_id'),
+                ],
             ]);
 
-            $verifyStatus = (int) ($response['Status'] ?? -1);
+            $verifyStatus = strtolower((string) ($response['Status'] ?? ''));
             $returnId = $response['ReturnId'] ?? null;
             $message = $response['Message'] ?? '';
+            $expectedAmount = $request->getGatewayData('amount');
 
-            if ($verifyStatus === 0) {
+            if (in_array($verifyStatus, ['ok', 'duplicate'], true)) {
+                if ($expectedAmount !== null && (int) $returnId !== (int) $expectedAmount) {
+                    throw GatewayException::verificationFailed(
+                        'mabna',
+                        'Verified amount does not match the requested amount',
+                        -4
+                    );
+                }
+
                 return new VerificationResponse(
                     success: true,
                     referenceId: (string) $returnId,
-                    cardNumber: null, // Mabna doesn't return card number
-                    amount: 0, // Mabna doesn't return amount in verify
+                    cardNumber: $request->getGatewayData('cardnumber'),
+                    amount: (int) $returnId,
                     transactionId: $digitalReceipt,
                     message: $message ?: 'Payment verified successfully',
                     rawResponse: [
-                        'status' => $verifyStatus,
+                        'status' => $response['Status'] ?? null,
                         'return_id' => $returnId,
                         'message' => $message,
                         'digital_receipt' => $digitalReceipt,
@@ -170,10 +184,12 @@ class MabnaGateway extends AbstractGateway
                 );
             }
 
+            $errorCode = is_numeric($returnId) ? (int) $returnId : -3;
+
             throw GatewayException::verificationFailed(
                 'mabna',
-                $message ?: $this->getErrorMessage($verifyStatus),
-                $verifyStatus
+                $message ?: $this->getErrorMessage($errorCode),
+                $errorCode
             );
         } catch (\Exception $e) {
             if ($e instanceof GatewayException) {
@@ -194,21 +210,13 @@ class MabnaGateway extends AbstractGateway
     {
         $errors = [
             0 => 'Transaction successful',
-            -1 => 'System error',
-            -2 => 'Invalid input parameters',
-            -3 => 'Terminal is inactive',
-            -4 => 'Invalid transaction amount',
-            -5 => 'Duplicate order number',
-            -6 => 'Invalid date or time',
-            -7 => 'Invalid callback URL',
-            -8 => 'Invalid token',
-            -9 => 'Token expired',
-            -10 => 'Transaction not found',
-            -11 => 'Transaction cancelled by user',
-            -12 => 'Transaction already verified',
-            -13 => 'Invalid reference number',
-            -14 => 'Transaction failed',
-            -15 => 'Invalid merchant',
+            -1 => 'Transaction not found',
+            -2 => 'IP mismatch or transaction already reversed',
+            -3 => 'General gateway error',
+            -4 => 'Callback URL does not match',
+            -5 => 'IP address is not allowed',
+            -6 => 'Rollback service is not enabled',
+            -7 => 'Invoice id does not match the original transaction',
         ];
 
         return $errors[$code] ?? "Unknown error (code: {$code})";
